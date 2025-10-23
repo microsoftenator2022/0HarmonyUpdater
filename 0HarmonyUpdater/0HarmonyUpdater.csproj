@@ -35,14 +35,40 @@
 	<!--<ItemGroup>
 		<None Include="Info.json" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
 	</ItemGroup>-->
-	<!--<Target Name="Deploy" AfterTargets="Build">
+	<Target Name="PrepareDeploy" BeforeTargets="Deploy">
 		<ItemGroup>
-			<Files Include="$(TargetDir)\**\*.*" />
+			<OwlcatModJson Include="$(TargetDir)\OwlcatModification*.json" />
+			<OtherFiles Include="$(TargetDir)\**\*.*" />
+			<OtherFiles Remove="@(OwlcatModJson)" />
+			<OtherFiles Remove="$(TargetDir)\$(MSBuildProjectName)\**\*.*" />
+			<OtherFiles Remove="$(TargetDir)\0Harmony.dll*; $(TargetDir)\DisableWebUpdate.txt*" />
+			<OwlcatModDirs Include="$(TargetDir)\$(MSBuildProjectName)\Assemblies; $(TargetDir)\$(MSBuildProjectName)\Blueprints; $(TargetDir)\$(MSBuildProjectName)\Bundles; $(TargetDir)\$(MSBuildProjectName)\Localization" />
 		</ItemGroup>
 
-		<Copy SourceFiles="@(Files)" DestinationFiles="@(Files->'$(RogueTraderData)\UnityModManager\$(AssemblyName)\%(RecursiveDir)%(Filename)%(Extension)')" />
+		<MakeDir Directories="@(OwlcatModDirs)" />
+		<Move SourceFiles="$(TargetDir)\0Harmony.dll; $(TargetDir)\DisableWebUpdate.txt" DestinationFolder="$(TargetDir)\$(MSBuildProjectName)" />
+		<Move SourceFiles="@(OwlcatModJson)" DestinationFolder="$(TargetDir)\$(MSBuildProjectName)" />
+		<Move SourceFiles="@(OtherFiles)" DestinationFiles="@(OtherFiles->'$(TargetDir)\$(MSBuildProjectName)\Assemblies\%(RecursiveDir)%(Filename)%(Extension)')" />
+	</Target>
+	<Target Name="Deploy" AfterTargets="Build">
+		<ItemGroup>	
+			<Files Include="$(TargetDir)\**\*.*" />
+			<OutputModDirs Include="$(RogueTraderData)\Modifications\$(MSBuildProjectName)\Assemblies" />
+			<OutputModDirs Include="$(RogueTraderData)\Modifications\$(MSBuildProjectName)\Blueprints" />
+			<OutputModDirs Include="$(RogueTraderData)\Modifications\$(MSBuildProjectName)\Bundles" />
+			<OutputModDirs Include="$(RogueTraderData)\Modifications\$(MSBuildProjectName)\Localization" />
+		</ItemGroup>
+
+		<MakeDir Directories="@(OutputModDirs)" />
+		<Copy SourceFiles="@(Files)" DestinationFiles="@(Files->'$(RogueTraderData)\Modifications\%(RecursiveDir)%(Filename)%(Extension)')" />
+	</Target>
+	<Target Name="PostDeploy" AfterTargets="Deploy">
+		<ItemGroup>
+			<OutputFiles Include="$(TargetDir)\**\*.*" />
+		</ItemGroup>
+
 		<ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)\$(OutputPath)" DestinationFile="$(MSBuildProjectDirectory)\$(OutputPath)\..\$(AssemblyName)-$(Version).zip" Overwrite="true" />
-	</Target>-->
+	</Target>
 	<ItemGroup>
 		<PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
 		<PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" IncludeAssets="build; contentfiles" Version="0.4.2" PrivateAssets="all" />
