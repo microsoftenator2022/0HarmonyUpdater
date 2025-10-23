@@ -1,0 +1,12 @@
+{
+  "UniqueName": "0HarmonyUpdater",
+  "Version": "1.0.0.0",
+  "DisplayName": "Harmony Updater",
+  "Description": "Auto updater for Harmony",
+  "Author": "Microsoftenator",
+  "ImageName": "",
+  "WorkshopId": "",
+  "Repository": "",
+  "HomePage": "",
+  "Dependencies": []
+}
