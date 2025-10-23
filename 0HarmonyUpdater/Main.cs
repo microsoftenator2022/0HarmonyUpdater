@@ -1,14 +1,20 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
+using Kingmaker;
+using Kingmaker.Code.UI.MVVM;
+using Kingmaker.GameModes;
 using Kingmaker.Modding;
 using Kingmaker.PubSubSystem;
 using Kingmaker.PubSubSystem.Core;
 using Kingmaker.UI.Legacy.MainMenuUI;
+using Kingmaker.Utility;
 
 using Owlcat.Runtime.Core.Logging;
+using Owlcat.Runtime.UniRx;
 
 using UnityEngine;
 using UnityEngine.Networking;
@@ -33,18 +39,8 @@ public static class Main
     static bool UpdateFromGithub = true;
     
     static readonly Regex ReleaseRegex = new(@"\/pardeike\/Harmony\/releases\/tag\/v(\d+\.\d+\.\d+\.\d+)");
-
-    class ShowMessageOnDisable : MonoBehaviour
-    {
-        public string? Message;
-        public void OnDisable()
-        {
-            if (Message is null)
-                return;
-            
-            EventBus.RaiseEvent<IDialogMessageBoxUIHandler>(w => w.HandleOpen(Message));
-        }
-    }
+    
+    static void ShowMessageBox(string message) => EventBus.RaiseEvent<IDialogMessageBoxUIHandler>(w => w.HandleOpen(message));
 
     static async Task<byte[]> TryDownloadHarmonyRelease(Version currentVersion)
     {
@@ -67,14 +63,18 @@ public static class Main
 
         var releasePage = webRequest.downloadHandler.text;
 
-        var (releasePath, releaseVersion) = GetLines(releasePage)
+        var (releasePath, releaseVersionString) = GetLines(releasePage)
             .Select(l => ReleaseRegex.Match(l))
             .Where(m => m.Success)
             .Select(m => (path: m.Value, version: m.Groups[1].Value))
             .OrderByDescending(r => Version.Parse(r.version))
             .First();
 
-        if (Version.Parse(releaseVersion) <= currentVersion)
+        var releaseVersion = Version.Parse(releaseVersionString);
+
+        Log.Log($"Found Harmony version {releaseVersion}");
+
+        if (releaseVersion <= currentVersion)
             return [];
 
         var expandedReleaseAssetsUri = $@"{uriBase}{releasePath.Replace("tag", "expanded_assets")}";
@@ -89,7 +89,7 @@ public static class Main
 
         var expandedReleaseAssets = webRequest.downloadHandler.text;
 
-        var zipPathRegex = new Regex ($@"/pardeike/Harmony/releases/download/v{releaseVersion}/Harmony[\w\-]*\.{releaseVersion}.zip");
+        var zipPathRegex = new Regex ($@"/pardeike/Harmony/releases/download/v{releaseVersionString}/Harmony[\w\-]*\.{releaseVersionString}.zip");
 
         var zips = GetLines(expandedReleaseAssets)
             .Select(l => zipPathRegex.Match(l))
@@ -121,91 +121,11 @@ public static class Main
         return buffer;
     }
 
-    //static void TryDownloadHarmonyRelease(Version currentVersion, Action<byte[]> continuation)
-    //{
-    //    static string[] GetLines(string s) =>
-    //        s.Split('\n')
-    //            .Select(static l => l.Trim())
-    //            .Where(static l => !string.IsNullOrEmpty(l))
-    //            .ToArray();
-
-    //    var uriBase = @"https://github.com";
-    //    var releasesUri = $@"{uriBase}/pardeike/Harmony/releases";
-
-    //    var requestOp = UnityWebRequest.Get(releasesUri).SendWebRequest();
-    //    var webRequest = requestOp.webRequest;
-
-    //    byte[] buffer = [];
-
-    //    requestOp.completed += _ =>
-    //    {
-    //        if (webRequest.result is not UnityWebRequest.Result.Success)
-    //            return;
-
-    //        var releasePage = webRequest.downloadHandler.text;
-
-    //        var (releasePath, releaseVersion) = GetLines(releasePage)
-    //            .Select(l => ReleaseRegex.Match(l))
-    //            .Where(m => m.Success)
-    //            .Select(m => (path: m.Value, version: m.Groups[1].Value))
-    //            .OrderByDescending(r => Version.Parse(r.version))
-    //            .First();
-
-    //        if (Version.Parse(releaseVersion) <= currentVersion)
-    //            return;
-
-    //        var expandedReleaseAssetsUri = $@"{uriBase}{releasePath.Replace("tag", "expanded_assets")}";
-
-    //        requestOp = UnityWebRequest.Get(expandedReleaseAssetsUri).SendWebRequest();
-    //        webRequest = requestOp.webRequest;
-
-    //        requestOp.completed += _ =>
-    //        {
-    //            if (webRequest.result is not UnityWebRequest.Result.Success)
-    //                return;
-
-    //            var expandedReleaseAssets = webRequest.downloadHandler.text;
-
-    //            var zipPathRegex = new Regex ($@"/pardeike/Harmony/releases/download/v{releaseVersion}/Harmony[\w\-]*\.{releaseVersion}.zip");
-
-    //            var zips = GetLines(expandedReleaseAssets)
-    //                .Select(l => zipPathRegex.Match(l))
-    //                .Where(l => l.Success)
-    //                .Select(l => l.Value)
-    //                .ToArray();
-
-    //            var zipPath = zips.FirstOrDefault(p => p.Contains("Fat")) ?? zips.First();
-
-    //            var zipUri = $@"{uriBase}{zipPath}";
-
-    //            Log.Log($"Downloading {zipUri}");
-
-    //            requestOp = UnityWebRequest.Get(zipUri).SendWebRequest();
-    //            webRequest = requestOp.webRequest;
-
-    //            requestOp.completed += _ =>
-    //            {
-    //                if (webRequest.result is not UnityWebRequest.Result.Success)
-    //                    return;
-
-    //                using var archive = new ZipArchive(new MemoryStream(webRequest.downloadHandler.data));
-
-    //                var entry = archive.Entries.First(entry => entry.FullName == @"net48/0Harmony.dll");
-    //                buffer = new byte[entry.Length];
-    //                using var s = entry.Open();
-    //                s.Read(buffer);
-
-    //                continuation(buffer);
-    //            };
-    //        };
-    //    };
-    //}
-
     static LogChannel Log = null!;
 
     static void HarmonyUpdate()
     {
-        if (File.Exists(Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "DisableWebUpdate.txt")))
+        if (File.Exists(Path.Join(Path.GetDirectoryName(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)), "DisableWebUpdate.txt")))
             UpdateFromGithub = false;
 
         var managedDir = Path.Join(Application.dataPath, "Managed");
@@ -242,16 +162,18 @@ public static class Main
             if (newHarmony.Length == 0)
                 return;
 
-            File.Move(harmonyPath, $"{harmonyPath}.{currentVersion}");
-            File.WriteAllBytes(harmonyPath, newHarmony);
+            //File.Move(harmonyPath, $"{harmonyPath}.{currentVersion}");
+            //File.WriteAllBytes(harmonyPath, newHarmony);
             var newHarmonyVersion = ParseFileVersion(harmonyPath);
             Log.Log($"Harmony version is now {newHarmonyVersion}");
 
             if (harmonyAss is not null)
             {
                 Log.Log("Restart for changes to take effect");
-                MainMenuLoadingScreen.Instance.gameObject.AddComponent<ShowMessageOnDisable>().Message = 
-                    $"Harmony updated ({currentVersion} -> {newHarmonyVersion})\nPlease restart for the change to take effect.";
+
+                var message = $"Harmony updated ({currentVersion} -> {newHarmonyVersion})\nPlease restart for the change to take effect.";
+                
+                DelayedInvoker.InvokeWhenTrue(() => ShowMessageBox(message), () => RootUIContext.Instance?.IsMainMenu is true);
             }
         }
 
@@ -264,15 +186,14 @@ public static class Main
                     {
                         newHarmony = t.Result;
                         doUpdate();
-                    })
-                    .Start();
-
-                return;
+                    });
             }
-            catch { }
+            catch(Exception ex)
+            {
+                Log.Exception(ex);
+            }
         }
-        
-        doUpdate();
+        else doUpdate();
     }
 
     [OwlcatModificationEnterPoint]
