@@ -162,8 +162,8 @@ public static class Main
             if (newHarmony.Length == 0)
                 return;
 
-            //File.Move(harmonyPath, $"{harmonyPath}.{currentVersion}");
-            //File.WriteAllBytes(harmonyPath, newHarmony);
+            File.Move(harmonyPath, $"{harmonyPath}.{currentVersion}");
+            File.WriteAllBytes(harmonyPath, newHarmony);
             var newHarmonyVersion = ParseFileVersion(harmonyPath);
             Log.Log($"Harmony version is now {newHarmonyVersion}");
 
